@@ -12,6 +12,7 @@ make -C cal_kernels/a_float_op_latency ARCH=native CONF=GV100 run
 make -C cal_kernels/a_float_op_latency ARCH=perf CONF=GV100 run report
 make -C cal_kernels/a_float_op_latency ARCH=native CONF=GH100 run
 make -C cal_kernels/a_float_op_latency ARCH=perf CONF=GH100 run report
+make -C cal_kernels/REAL_spmm ARCH=cais CONF=A100 RUN_ARGS="test" run report
 make -C cal_kernels/a_float_op_latency ARCH=single CONF=GV100 run report
 make -C cal_kernels/a_float_op_latency ARCH=cais CONF=GV100 run report
 ```
@@ -29,6 +30,9 @@ make -C cal_kernels/a_float_op_latency ARCH=cais CONF=GV100 run report
   mode under `run-single/<CONF>/`.
 - `ARCH=cais` builds `sm_70` with CUDA 9 and runs through the CAIS simulator
   under `run-cais/<CONF>/`.
+- `ARCH=single|cais CONF=A100` uses the external simulator tree at
+  `~/htm-workbench/accel-sim-framework/gpgpu-sim`, compiles with `sm_80`,
+  and stages `SM8_A100` from `cal_kernels/configs/tested-cfgs/SM8_A100`.
 
 Simulator workload compilation uses the external GCC 5.4 setup:
 
