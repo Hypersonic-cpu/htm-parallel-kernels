@@ -1,0 +1,10 @@
+*/build/
+*/run/
+validate_single/*/build/
+validate_single/*/run/
+validate_multi/*/build/
+validate_multi/*/run/
+*.log
+.vscode/
+.zed/
+.clangd

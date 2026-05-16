@@ -1,0 +1,198 @@
+*.log
+build/
+**/build/
+logs/
+run-*/
+**/run-*/
+*.swp
+
+# ============================================================
+# OS junk
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Linux
+*~
+.directory
+.nfs*
+
+
+# ============================================================
+# Editors / IDEs
+# ============================================================
+
+# Vim / Neovim
+*.swp
+*.swo
+*.swn
+Session.vim
+Sessionx.vim
+.netrwhist
+.nvimlog
+tags
+tags.lock
+tags.temp
+
+# VS Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Cursor
+.cursor/
+.cursorignore
+
+# Zed
+.zed/
+
+# JetBrains, if accidentally opened
+.idea/
+
+
+# ============================================================
+# clangd / language servers
+# ============================================================
+
+# Keep project clangd config if you use one
+
+# clangd index/cache
+.cache/clangd/
+.clangd-index/
+compile_commands.json.tmp
+
+
+# ============================================================
+# Build systems
+# ============================================================
+
+# Generic build dirs
+build/
+build-*/
+out/
+dist/
+bin/
+obj/
+debug/
+release/
+Debug/
+Release/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+
+# Ninja / Make
+.ninja_deps
+.ninja_log
+*.ninja
+Makefile
+
+# Autotools
+.deps/
+.libs/
+*.la
+*.lo
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+
+# ============================================================
+# C / C++ generated files
+# ============================================================
+
+*.o
+*.obj
+*.d
+*.gcda
+*.gcno
+*.gcov
+*.profraw
+*.profdata
+*.s
+*.ii
+*.bc
+*.ll
+
+
+# ============================================================
+# Logs / temporary files
+# ============================================================
+
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
+.cache*/
+*.pid
+*.seed
+
+
+# ============================================================
+# Python helper scripts / tooling
+# ============================================================
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+
+# ============================================================
+# Project-local generated data
+# ============================================================
+
+results/
+outputs/
+output/
+reports/
+plots/
+figures/generated/
+*.csv
+*.jsonl
+
+
+# ============================================================
+# Large / binary artifacts
+# ============================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.bin
+*.dump
+*.trace
+*.prof
+*.nsys-rep
+*.qdrep
+*.sqlite
+*.sqlite3
