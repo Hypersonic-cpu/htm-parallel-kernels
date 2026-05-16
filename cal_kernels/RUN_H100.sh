@@ -24,6 +24,8 @@ KERNELS=(
   f_hbm_bank_parallel
   REAL_reduce
   REAL_spmm
+  REAL_gemm
+  REAL_vadd
   REAL_gather
   REAL_scatter
   REAL_softmax

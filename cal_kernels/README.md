@@ -56,6 +56,8 @@ The repo does not vendor GCC 5.4 wrappers or compiler binaries.
 - `f_hbm_bank_parallel`: HBM bandwidth / bank-level parallelism.
 - `REAL_reduce`: deterministic reduction.
 - `REAL_spmm`: deterministic CSR SpMM.
+- `REAL_gemm`: deterministic shared-memory GEMM.
+- `REAL_vadd`: deterministic vector add correctness check.
 - `REAL_gather`: deterministic gather.
 - `REAL_scatter`: deterministic scatter.
 - `REAL_softmax`: deterministic row-wise softmax.

@@ -26,6 +26,8 @@ unless the user gives newer instructions.
 - Real workloads:
   - `REAL_reduce`
   - `REAL_spmm`
+  - `REAL_gemm`
+  - `REAL_vadd`
   - `REAL_gather`
   - `REAL_scatter`
   - `REAL_softmax`
