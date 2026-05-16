@@ -25,9 +25,10 @@ CUDA9_INSTALL_PATH ?= /usr/local/cuda-9.0
 GCC54_SOURCE ?= $(HOME)/tools/opt/source-gcc54
 PYTHON ?= python3
 BIN_NAME ?= app
-RUN_ROOT ?= run-$(CONF)
+RUN_ROOT ?= run-$(ARCH)
+RUN_SUBDIR ?= $(CONF)
 BUILD_DIR ?= build/$(CONF)/$(ARCH)
-RUN_DIR ?= $(RUN_ROOT)/$(ARCH)
+RUN_DIR ?= $(RUN_ROOT)/$(RUN_SUBDIR)
 PROG ?= $(BUILD_DIR)/$(BIN_NAME)
 RUN_BIN ?= $(RUN_DIR)/$(BIN_NAME)
 DEFAULT_CONF_NAME := SM7_$(CONF)
@@ -140,6 +141,7 @@ show:
 	@echo SRC_CONF=$(SRC_CONF)
 	@echo PROG=$(PROG)
 	@echo RUN_ROOT=$(RUN_ROOT)
+	@echo RUN_SUBDIR=$(RUN_SUBDIR)
 	@echo RUN_DIR=$(RUN_DIR)
 	@echo SIM_LIBCUDART_SO=$(SIM_LIBCUDART_SO)
 

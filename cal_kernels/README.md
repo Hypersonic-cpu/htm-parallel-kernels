@@ -17,18 +17,18 @@ make -C cal_kernels/a_float_op_latency ARCH=cais CONF=GV100 run report
 ```
 
 - `ARCH=native CONF=GV100` builds `sm_70`, runs directly with CUDA 12, and
-  writes application output under `run-GV100/native/`. Its `report` target is
+  writes application output under `run-native/GV100/`. Its `report` target is
   intentionally empty.
 - `ARCH=native CONF=GH100` builds `sm_90`, runs directly with CUDA 12, and
-  writes application output under `run-GH100/native/`.
+  writes application output under `run-native/GH100/`.
 - `ARCH=perf CONF=GV100` builds `sm_70`, profiles with `ncu`, and writes
-  artifacts under `run-GV100/perf/`.
+  artifacts under `run-perf/GV100/`.
 - `ARCH=perf CONF=GH100` builds `sm_90`, profiles with `ncu`, and writes
-  artifacts under `run-GH100/perf/`.
+  artifacts under `run-perf/GH100/`.
 - `ARCH=single` builds `sm_70` with CUDA 9 and runs through GPGPU-Sim single
-  mode under `run-<CONF>/single/`.
+  mode under `run-single/<CONF>/`.
 - `ARCH=cais` builds `sm_70` with CUDA 9 and runs through the CAIS simulator
-  under `run-<CONF>/cais/`.
+  under `run-cais/<CONF>/`.
 
 Simulator workload compilation uses the external GCC 5.4 setup:
 
@@ -78,13 +78,13 @@ HBM-facing kernels now default to cold-run behavior:
 
 Typical outputs:
 
-- `run-<CONF>/<arch>/stats.txt`: stdout/stderr from the run, saved through
+- `run-<arch>/<subdir>/stats.txt`: stdout/stderr from the run, saved through
   `tee`.
-- `run-<CONF>/perf/ncu.csv`: raw Nsight Compute CSV.
-- `run-<CONF>/{native,perf}/<bin>.ptx`: PTX dump from `cuobjdump`.
-- `run-<CONF>/{native,perf}/<bin>.sass`: SASS dump from `cuobjdump`.
-- `run-<CONF>/<arch>/report.txt`: parsed report text.
-- `run-<CONF>/<arch>/report.csv`: explainable CSV generated from the report.
+- `run-perf/<subdir>/ncu.csv`: raw Nsight Compute CSV.
+- `run-{native,perf}/<subdir>/<bin>.ptx`: PTX dump from `cuobjdump`.
+- `run-{native,perf}/<subdir>/<bin>.sass`: SASS dump from `cuobjdump`.
+- `run-<arch>/<subdir>/report.txt`: parsed report text.
+- `run-<arch>/<subdir>/report.csv`: explainable CSV generated from the report.
 
 To pack run artifacts:
 

@@ -78,20 +78,20 @@ make -C cal_kernels/a_float_op_latency ARCH=cais CONF=GV100 run report
 - Every CUDA source must reject missing hardware macros with `#error` and print
   a compile-time `#pragma message` identifying Volta V100 or Hopper H100.
 
-Run directories are config-specific:
+Run directories are arch-rooted:
 
 ```text
-run-GV100/native
-run-GV100/perf
-run-GV100/single
-run-GV100/cais
-run-GH100/native
-run-GH100/perf
-run-GH100/single
-run-GH100/cais
+run-native/GV100
+run-perf/GV100
+run-single/GV100
+run-cais/GV100
+run-native/GH100
+run-perf/GH100
+run-single/GH100
+run-cais/GH100
 ```
 
-Do not reintroduce bare `run/<arch>` paths.
+Do not reintroduce bare `run/<arch>` paths or `run-<CONF>/<arch>` paths.
 
 ## GCC 5.4 Rule
 
