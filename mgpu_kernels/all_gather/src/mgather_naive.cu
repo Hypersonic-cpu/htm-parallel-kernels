@@ -2,9 +2,12 @@
 #include <cuda_runtime.h>
 
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+
+#include "l2_flush.h"
 
 #ifndef MAX_GPUS
 #define MAX_GPUS 4
@@ -42,6 +45,22 @@ __device__ __forceinline__ float make_value_device(int src_gpu, std::size_t i) {
 
 static float make_value_host(int src_gpu, std::size_t i) {
   return static_cast<float>((src_gpu + 1) * 1000 + static_cast<int>(i % 251));
+}
+
+static std::size_t chunk_elems_for_case(const char *case_name) {
+  if (std::strcmp(case_name, "test") == 0) {
+    return 4096;
+  }
+  if (std::strcmp(case_name, "le_l2") == 0) {
+    return 1u << 18;
+  }
+  if (std::strcmp(case_name, "approx_l2") == 0) {
+    return 1u << 20;
+  }
+  if (std::strcmp(case_name, "gt_l2") == 0) {
+    return 1u << 22;
+  }
+  return 0;
 }
 
 __global__ void allgather_peer_kernel(float **srcs, float *dst, int n_gpu,
@@ -89,21 +108,27 @@ static void enable_full_peer_access(int n_gpu) {
 
 int main(int argc, char **argv) {
   int n_gpu = 1;
+  bool use_test_case = false;
 
 #ifdef GPGPU_SIM
   // Small default for simulator.
-  std::size_t chunk_elems = 4096;
+  std::size_t chunk_elems = chunk_elems_for_case("test");
 #else
-  // Native default: 1M floats per GPU = 4 MiB per GPU chunk.
-  // For 4 GPUs, each GPU output is 16 MiB.
-  std::size_t chunk_elems = 1u << 20;
+  // Native default.
+  std::size_t chunk_elems = chunk_elems_for_case("approx_l2");
 #endif
 
   if (argc >= 2) {
     n_gpu = std::atoi(argv[1]);
   }
   if (argc >= 3) {
-    chunk_elems = std::strtoull(argv[2], nullptr, 10);
+    const std::size_t prof_size = chunk_elems_for_case(argv[2]);
+    if (prof_size != 0) {
+      chunk_elems = prof_size;
+      use_test_case = (std::strcmp(argv[2], "test") == 0);
+    } else {
+      chunk_elems = std::strtoull(argv[2], nullptr, 10);
+    }
   }
 
   if (!(n_gpu == 1 || n_gpu == 2 || n_gpu == 4)) {
@@ -118,6 +143,10 @@ int main(int argc, char **argv) {
 
   if (chunk_elems == 0) {
     fprintf(stderr, "ERROR: chunk_elems must be non-zero\n");
+    return EXIT_FAILURE;
+  }
+  if (use_test_case && n_gpu < 2) {
+    fprintf(stderr, "ERROR: test case requires multi-GPU (n_gpu >= 2)\n");
     return EXIT_FAILURE;
   }
 
@@ -151,6 +180,8 @@ int main(int argc, char **argv) {
   std::vector<float *> d_in(n_gpu, nullptr);
   std::vector<float *> d_out(n_gpu, nullptr);
   std::vector<float **> d_src_table(n_gpu, nullptr);
+  std::vector<float *> d_l2_flush(n_gpu, nullptr);
+  const std::size_t l2_flush_elements = cal_kernels::kColdL2FlushBytes / sizeof(float);
 
   // Allocate one input chunk and one full gather output per GPU.
   for (int g = 0; g < n_gpu; ++g) {
@@ -159,6 +190,8 @@ int main(int argc, char **argv) {
     CHECK_CUDA(cudaMalloc(&d_in[g], chunk_bytes));
     CHECK_CUDA(cudaMalloc(&d_out[g], out_bytes));
     CHECK_CUDA(cudaMalloc(&d_src_table[g], n_gpu * sizeof(float *)));
+    CHECK_CUDA(cudaMalloc(&d_l2_flush[g], l2_flush_elements * sizeof(float)));
+    CHECK_CUDA(cudaMemset(d_l2_flush[g], 0, l2_flush_elements * sizeof(float)));
 
     std::vector<float> h_in(chunk_elems);
     for (std::size_t i = 0; i < chunk_elems; ++i) {
@@ -183,6 +216,16 @@ int main(int argc, char **argv) {
 
     CHECK_CUDA(cudaMemcpy(d_src_table[g], d_in.data(), n_gpu * sizeof(float *),
                           cudaMemcpyHostToDevice));
+  }
+
+  // Flush each GPU before the measured kernel launch.
+  for (int g = 0; g < n_gpu; ++g) {
+    CHECK_CUDA(cudaSetDevice(g));
+    CHECK_CUDA(cal_kernels::run_cold_l2_flush(d_l2_flush[g], l2_flush_elements));
+  }
+  for (int g = 0; g < n_gpu; ++g) {
+    CHECK_CUDA(cudaSetDevice(g));
+    CHECK_CUDA(cudaDeviceSynchronize());
   }
 
   constexpr int kThreads = 256;
@@ -249,6 +292,7 @@ int main(int argc, char **argv) {
     CHECK_CUDA(cudaFree(d_src_table[g]));
     CHECK_CUDA(cudaFree(d_out[g]));
     CHECK_CUDA(cudaFree(d_in[g]));
+    CHECK_CUDA(cudaFree(d_l2_flush[g]));
   }
 
   if (total_errors == 0) {

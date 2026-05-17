@@ -1,9 +1,12 @@
 #include <cuda_runtime.h>
 
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+
+#include "l2_flush.h"
 
 #ifndef MAX_GPUS
 #define MAX_GPUS 4
@@ -42,6 +45,22 @@ static float input_value(int gpu, std::size_t i) {
   return static_cast<float>((gpu + 1) * 100 + static_cast<int>(i % 31));
 }
 
+static std::size_t elem_count_for_case(const char *case_name) {
+  if (std::strcmp(case_name, "test") == 0) {
+    return 4096;
+  }
+  if (std::strcmp(case_name, "le_l2") == 0) {
+    return 1u << 18;
+  }
+  if (std::strcmp(case_name, "approx_l2") == 0) {
+    return 1u << 20;
+  }
+  if (std::strcmp(case_name, "gt_l2") == 0) {
+    return 1u << 22;
+  }
+  return 0;
+}
+
 static void enable_full_peer_access(int n_gpu) {
   for (int i = 0; i < n_gpu; ++i) {
     CHECK_CUDA(cudaSetDevice(i));
@@ -66,17 +85,24 @@ static void enable_full_peer_access(int n_gpu) {
 
 int main(int argc, char **argv) {
   int n_gpu = 1;
+  bool use_test_case = false;
 #ifdef GPGPU_SIM
-  std::size_t n_elem = 4096;
+  std::size_t n_elem = elem_count_for_case("test");
 #else
-  std::size_t n_elem = 1u << 20;
+  std::size_t n_elem = elem_count_for_case("approx_l2");
 #endif
 
   if (argc >= 2) {
     n_gpu = std::atoi(argv[1]);
   }
   if (argc >= 3) {
-    n_elem = std::strtoull(argv[2], nullptr, 10);
+    const std::size_t prof_size = elem_count_for_case(argv[2]);
+    if (prof_size != 0) {
+      n_elem = prof_size;
+      use_test_case = (std::strcmp(argv[2], "test") == 0);
+    } else {
+      n_elem = std::strtoull(argv[2], nullptr, 10);
+    }
   }
 
   if (!(n_gpu == 1 || n_gpu == 2 || n_gpu == 4)) {
@@ -89,6 +115,10 @@ int main(int argc, char **argv) {
   }
   if (n_elem == 0) {
     fprintf(stderr, "ERROR: n_elem must be non-zero\n");
+    return EXIT_FAILURE;
+  }
+  if (use_test_case && n_gpu < 2) {
+    fprintf(stderr, "ERROR: test case requires multi-GPU (n_gpu >= 2)\n");
     return EXIT_FAILURE;
   }
 
@@ -114,11 +144,15 @@ int main(int argc, char **argv) {
 
   std::vector<float *> d_in(n_gpu, nullptr);
   std::vector<float *> d_out(n_gpu, nullptr);
+  std::vector<float *> d_l2_flush(n_gpu, nullptr);
+  const std::size_t l2_flush_elements = cal_kernels::kColdL2FlushBytes / sizeof(float);
 
   for (int g = 0; g < n_gpu; ++g) {
     CHECK_CUDA(cudaSetDevice(g));
     CHECK_CUDA(cudaMalloc(&d_in[g], bytes));
     CHECK_CUDA(cudaMalloc(&d_out[g], bytes));
+    CHECK_CUDA(cudaMalloc(&d_l2_flush[g], l2_flush_elements * sizeof(float)));
+    CHECK_CUDA(cudaMemset(d_l2_flush[g], 0, l2_flush_elements * sizeof(float)));
 
     std::vector<float> h_in(n_elem);
     for (std::size_t i = 0; i < n_elem; ++i) {
@@ -127,6 +161,16 @@ int main(int argc, char **argv) {
 
     CHECK_CUDA(cudaMemcpy(d_in[g], h_in.data(), bytes, cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemset(d_out[g], 0, bytes));
+  }
+
+  // Flush each GPU before the measured kernel launch.
+  for (int g = 0; g < n_gpu; ++g) {
+    CHECK_CUDA(cudaSetDevice(g));
+    CHECK_CUDA(cal_kernels::run_cold_l2_flush(d_l2_flush[g], l2_flush_elements));
+  }
+  for (int g = 0; g < n_gpu; ++g) {
+    CHECK_CUDA(cudaSetDevice(g));
+    CHECK_CUDA(cudaDeviceSynchronize());
   }
 
   constexpr int kThreads = 256;
@@ -179,6 +223,7 @@ int main(int argc, char **argv) {
     CHECK_CUDA(cudaSetDevice(g));
     CHECK_CUDA(cudaFree(d_out[g]));
     CHECK_CUDA(cudaFree(d_in[g]));
+    CHECK_CUDA(cudaFree(d_l2_flush[g]));
   }
 
   if (total_errors == 0) {

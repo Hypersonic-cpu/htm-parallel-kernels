@@ -10,7 +10,7 @@ CAIS `real_cuda` execution model.
   - `Makefile`
   - `src/`
   - `build/<CONF>/<ARCH>/`
-  - `run-<CONF>/<ARCH>/`
+  - `run-<ARCH>/<subdir>/`
 - Reuse `cal_kernels/common.mk` unless there is a benchmark-specific reason not
   to.
 
@@ -48,13 +48,23 @@ CAIS `real_cuda` execution model.
 ## Measurement Notes
 
 - `all_gather` defaults differ by build mode:
-  - native/perf default `chunk_elems = 1 << 20`
-  - simulator (`GPGPU_SIM`) default `chunk_elems = 4096`
-  - for direct perf-vs-sim comparison, pass `RUN_ARGS='1 4096'` (or another explicit pair).
+  - default profile is `approx_l2` on native and `test` on simulator
+  - supported size profiles via `RUN_ARGS='<num_gpus> <profile>'`:
+    - `test` (small, quick sim)
+    - `le_l2`
+    - `approx_l2`
+    - `gt_l2`
+  - you can still pass explicit numeric element count as the second field.
+- `all_reduce` and `peer_copy` use the same profile names in `RUN_ARGS`.
+- For profile `test`, use multi-GPU runs (`num_gpus >= 2`) for validation.
 - For `ARCH=cais`, the first `RUN_ARGS` field is also staged into the copied
   `gpgpusim.config` as `-gpgpu_num_devices` through `SIM_NUM_DEVICES`.
   Example: `RUN_ARGS='4 1024'` requests four visible CUDA devices and a
   1024-element chunk.
+- Before the measured mgpu kernel, each GPU runs one L2 flush launch and then
+  all GPUs are synchronized:
+  - native: real flush over the full flush buffer
+  - simulator: placeholder flush kernel (sim-side config controls cache state)
 - Do not run multiple CAIS mgpu invocations concurrently into the same
   `RUN_ROOT`/`RUN_DIR`; staging rewrites the copied run config. Use distinct
   `RUN_ROOT`s for parallel experiments.

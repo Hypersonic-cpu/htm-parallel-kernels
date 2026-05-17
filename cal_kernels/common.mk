@@ -63,7 +63,7 @@ NCU ?= $(CUDA_INSTALL_PATH)/bin/ncu
 NATIVE_PTX_DUMP ?= $(RUN_DIR)/$(BIN_NAME).ptx
 NATIVE_SASS_DUMP ?= $(RUN_DIR)/$(BIN_NAME).sass
 NATIVE_SM ?= $(if $(filter GH100,$(CONF)),sm_90,$(if $(filter A100,$(CONF)),sm_80,sm_70))
-HW_DEFINE := $(if $(filter GH100 A100,$(CONF)),-DHW_H100,-DHW_V100)
+HW_DEFINE := $(if $(filter A100,$(CONF)),-DHW_A100 -DHW_H100,$(if $(filter GH100,$(CONF)),-DHW_H100,-DHW_V100))
 SIM_SM ?= $(if $(filter A100,$(CONF)),sm_80,sm_70)
 ifneq ($(filter $(ARCH),native perf),)
 BUILD_NVCC := $(NVCC)
@@ -73,7 +73,7 @@ else
 BUILD_NVCC := bash -lc 'set -euo pipefail; source "$(GCC54_SOURCE)"; exec "$(NVCC)" -ccbin "$${NVCC_CCBIN}" "$$@"' --
 endif
 
-CXXFLAGS ?= -I $(REPO_ROOT)/test_kernels/include -I $(REPO_ROOT)/cal_kernels/common -Xcompiler -fopenmp --expt-relaxed-constexpr -O2 -lineinfo
+CXXFLAGS ?= -I $(REPO_ROOT)/test_kernels/include -I $(REPO_ROOT)/cal_kernels/common -Xcompiler -fopenmp --expt-relaxed-constexpr -O3 -lineinfo
 CUFLAGS ?= -std=c++14
 CUFLAGS += $(HW_DEFINE)
 ifneq ($(filter $(ARCH),native perf),)

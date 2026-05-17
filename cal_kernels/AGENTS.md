@@ -74,7 +74,8 @@ make -C cal_kernels/a_float_op_latency ARCH=cais CONF=GV100 run report
 - `CONF=GV100` stages `SM7_GV100`; `CONF=GH100` stages `SM7_GH100`;
   `CONF=A100` stages `SM8_A100`.
 - GH100 simulator configs are compatibility configs, not validated Hopper models.
-- `CONF=GV100` adds `-DHW_V100`; `CONF=GH100`/`CONF=A100` adds `-DHW_H100`.
+- `CONF=GV100` adds `-DHW_V100`; `CONF=GH100` adds `-DHW_H100`; `CONF=A100`
+  adds both `-DHW_A100` and `-DHW_H100`.
 - `SIM_CONFIG_SED` can patch the staged `gpgpusim.config` copy at run time via
   `sed -i -e "<expr>"` (supports semicolon-separated expressions in one string).
   Use this for sweep experiments instead of editing simulator source configs.
@@ -189,6 +190,8 @@ For `REAL_*` workloads:
   - warm launch count stays explicit but defaults to 0
   - native launch repeat defaults to 10
   - perf/simulator launch repeat defaults to 1
+- Initial correctness smoke validation should run `RUN_ARGS='test'` first (for
+  example `REAL_spmm`, `REAL_gemm`, `REAL_vadd`) before larger cases.
 
 ## Validation Rules
 

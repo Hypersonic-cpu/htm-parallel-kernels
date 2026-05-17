@@ -12,12 +12,14 @@
 #include "l2_flush.h"
 #include "native_stats.h"
 
-#if defined(HW_H100)
-#pragma message("compile-time info: Hopper H100/A100")
+#if defined(HW_A100)
+#pragma message("compile-time info: Ampere A100")
+#elif defined(HW_H100)
+#pragma message("compile-time info: Hopper H100")
 #elif defined(HW_V100)
 #pragma message("compile-time info: Volta V100")
 #else
-#error Unsupported hardware target. Define HW_V100 or HW_H100.
+#error Unsupported hardware target. Define HW_V100, HW_H100, or HW_A100.
 #endif
 
 namespace {
@@ -39,10 +41,21 @@ struct CaseConfig {
   int k;
 };
 
+#if defined(HW_H100) || defined(HW_A100)
 const CaseConfig kCases[] = {
     {"test", 128, 128, 128},
-    {"small", 192, 192, 128},
+    {"le_l2", 256, 256, 256},
+    {"approx_l2", 512, 512, 512},
+    {"gt_l2", 1024, 1024, 1024},
 };
+#else
+const CaseConfig kCases[] = {
+    {"test", 128, 128, 128},
+    {"le_l2", 192, 192, 192},
+    {"approx_l2", 384, 384, 384},
+    {"gt_l2", 768, 768, 768},
+};
+#endif
 
 #define CHECK_CUDA(call)                                                       \
   do {                                                                         \
@@ -91,10 +104,12 @@ int run_case(const CaseConfig& cfg) {
   std::vector<float> a(a_elems), b(b_elems), c(c_elems), expected(c_elems, 0.0f);
 
   for (std::size_t i = 0; i < a.size(); ++i) {
-    a[i] = static_cast<float>((i * 13) % 97 - 48) * 0.03125f;
+    const int v = static_cast<int>((i * 13ULL) % 97ULL) - 48;
+    a[i] = static_cast<float>(v) * 0.03125f;
   }
   for (std::size_t i = 0; i < b.size(); ++i) {
-    b[i] = static_cast<float>((i * 17) % 89 - 44) * 0.03125f;
+    const int v = static_cast<int>((i * 17ULL) % 89ULL) - 44;
+    b[i] = static_cast<float>(v) * 0.03125f;
   }
   for (int row = 0; row < cfg.m; ++row) {
     for (int col = 0; col < cfg.n; ++col) {

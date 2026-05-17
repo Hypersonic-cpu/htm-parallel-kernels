@@ -13,12 +13,14 @@
 #include "l2_flush.h"
 #include "native_stats.h"
 
-#if defined(HW_H100)
+#if defined(HW_A100)
+#pragma message("compile-time info: Ampere A100")
+#elif defined(HW_H100)
 #pragma message("compile-time info: Hopper H100")
 #elif defined(HW_V100)
 #pragma message("compile-time info: Volta V100")
 #else
-#error Unsupported hardware target. Define HW_V100 or HW_H100.
+#error Unsupported hardware target. Define HW_V100, HW_H100, or HW_A100.
 #endif
 
 namespace {
@@ -39,7 +41,7 @@ struct CaseConfig {
   int cols;
 };
 
-#if defined(HW_H100)
+#if defined(HW_H100) || defined(HW_A100)
 const CaseConfig kCases[] = {
     {"test", 4096, 4096},
     {"le_l2", 262144, 262144},
