@@ -101,7 +101,7 @@ compile_commands.json
 .ninja_deps
 .ninja_log
 *.ninja
-Makefile
+#Makefile
 
 # Autotools
 .deps/
