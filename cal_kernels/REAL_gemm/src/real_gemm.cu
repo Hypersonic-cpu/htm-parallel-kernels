@@ -137,13 +137,6 @@ int run_case(const CaseConfig& cfg) {
   CHECK_CUDA(cudaMalloc(&dev_l2_flush, l2_flush_elements * sizeof(float)));
   CHECK_CUDA(cudaMemset(dev_l2_flush, 0, l2_flush_elements * sizeof(float)));
 #endif
-#ifndef GPGPU_SIM
-  cudaEvent_t start = nullptr;
-  cudaEvent_t stop = nullptr;
-  CHECK_CUDA(cudaEventCreate(&start));
-  CHECK_CUDA(cudaEventCreate(&stop));
-#endif
-
   const dim3 block(kThreadsX, kThreadsY);
   const dim3 grid((cfg.n + kTile - 1) / kTile, (cfg.m + kTile - 1) / kTile);
   std::vector<double> time_samples;
@@ -155,7 +148,6 @@ int run_case(const CaseConfig& cfg) {
 #if !defined(PERF_RUN)
       CHECK_CUDA(cal_kernels::run_cold_l2_flush(dev_l2_flush, l2_flush_elements));
 #endif
-#ifdef GPGPU_SIM
       const auto start_time = std::chrono::steady_clock::now();
       gemm_shared_kernel<<<grid, block>>>(dev_a, dev_b, dev_c, cfg.m, cfg.n, cfg.k);
       CHECK_CUDA(cudaGetLastError());
@@ -163,15 +155,6 @@ int run_case(const CaseConfig& cfg) {
       const auto stop_time = std::chrono::steady_clock::now();
       const double elapsed_ms =
           std::chrono::duration<double, std::milli>(stop_time - start_time).count();
-#else
-      CHECK_CUDA(cudaEventRecord(start));
-      gemm_shared_kernel<<<grid, block>>>(dev_a, dev_b, dev_c, cfg.m, cfg.n, cfg.k);
-      CHECK_CUDA(cudaGetLastError());
-      CHECK_CUDA(cudaEventRecord(stop));
-      CHECK_CUDA(cudaEventSynchronize(stop));
-      float elapsed_ms = 0.0f;
-      CHECK_CUDA(cudaEventElapsedTime(&elapsed_ms, start, stop));
-#endif
       launch_samples.push_back(static_cast<double>(elapsed_ms));
     }
     time_samples.push_back(cal_kernels::average_samples(launch_samples, kWarmLaunches));
@@ -194,10 +177,6 @@ int run_case(const CaseConfig& cfg) {
       checksum, abs_error, time_stats.min, time_stats.median, time_stats.avg,
       time_stats.max);
 
-#ifndef GPGPU_SIM
-  CHECK_CUDA(cudaEventDestroy(stop));
-  CHECK_CUDA(cudaEventDestroy(start));
-#endif
 #if !defined(PERF_RUN)
   CHECK_CUDA(cudaFree(dev_l2_flush));
 #endif

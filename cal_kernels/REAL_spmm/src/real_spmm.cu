@@ -160,12 +160,6 @@ int run_case(const CaseConfig &cfg) {
 
   const int total = cfg.rows * kDenseCols;
   const int blocks = (total + kThreads - 1) / kThreads;
-#ifndef GPGPU_SIM
-  cudaEvent_t start = nullptr;
-  cudaEvent_t stop = nullptr;
-  CHECK_CUDA(cudaEventCreate(&start));
-  CHECK_CUDA(cudaEventCreate(&stop));
-#endif
   std::vector<double> time_samples;
   time_samples.reserve(cal_kernels::kNativePasses);
   for (int pass = 0; pass < cal_kernels::kNativePasses; ++pass) {
@@ -176,7 +170,6 @@ int run_case(const CaseConfig &cfg) {
       CHECK_CUDA(
           cal_kernels::run_cold_l2_flush(dev_l2_flush, l2_flush_elements));
 #endif
-#ifdef GPGPU_SIM
       const auto start_time = std::chrono::steady_clock::now();
       spmm_csr_kernel<<<blocks, kThreads>>>(dev_row_ptr, dev_col_idx,
                                             dev_values, dev_dense, dev_out,
@@ -187,17 +180,6 @@ int run_case(const CaseConfig &cfg) {
       const double elapsed_ms =
           std::chrono::duration<double, std::milli>(stop_time - start_time)
               .count();
-#else
-      CHECK_CUDA(cudaEventRecord(start));
-      spmm_csr_kernel<<<blocks, kThreads>>>(dev_row_ptr, dev_col_idx,
-                                            dev_values, dev_dense, dev_out,
-                                            cfg.rows, kDenseCols);
-      CHECK_CUDA(cudaGetLastError());
-      CHECK_CUDA(cudaEventRecord(stop));
-      CHECK_CUDA(cudaEventSynchronize(stop));
-      float elapsed_ms = 0.0f;
-      CHECK_CUDA(cudaEventElapsedTime(&elapsed_ms, start, stop));
-#endif
       launch_samples.push_back(static_cast<double>(elapsed_ms));
     }
     time_samples.push_back(
@@ -224,10 +206,6 @@ int run_case(const CaseConfig &cfg) {
       footprint_bytes(cfg), kRepeats, cal_kernels::kNativePasses, checksum,
       error, time_stats.min, time_stats.median, time_stats.avg, time_stats.max);
 
-#ifndef GPGPU_SIM
-  CHECK_CUDA(cudaEventDestroy(stop));
-  CHECK_CUDA(cudaEventDestroy(start));
-#endif
 #if !defined(PERF_RUN)
   CHECK_CUDA(cudaFree(dev_l2_flush));
 #endif

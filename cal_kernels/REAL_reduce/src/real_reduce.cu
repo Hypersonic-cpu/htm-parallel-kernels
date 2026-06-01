@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <chrono>
+#include <cstring>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -99,12 +100,6 @@ int run_case(const CaseConfig &cfg) {
   CHECK_CUDA(cudaMalloc(&dev_l2_flush, l2_flush_elements * sizeof(float)));
   CHECK_CUDA(cudaMemset(dev_l2_flush, 0, l2_flush_elements * sizeof(float)));
 #endif
-#ifndef GPGPU_SIM
-  cudaEvent_t start = nullptr;
-  cudaEvent_t stop = nullptr;
-  CHECK_CUDA(cudaEventCreate(&start));
-  CHECK_CUDA(cudaEventCreate(&stop));
-#endif
   std::vector<double> time_samples;
   time_samples.reserve(cal_kernels::kNativePasses);
 
@@ -115,7 +110,6 @@ int run_case(const CaseConfig &cfg) {
 #if !defined(GPGPU_SIM) && !defined(PERF_RUN)
       CHECK_CUDA(cal_kernels::run_cold_l2_flush(dev_l2_flush, l2_flush_elements));
 #endif
-#ifdef GPGPU_SIM
       const auto start_time = std::chrono::steady_clock::now();
       reduce_blocks<<<kBlocks, kThreads>>>(dev_input, dev_partials, cfg.elements);
       CHECK_CUDA(cudaGetLastError());
@@ -124,15 +118,6 @@ int run_case(const CaseConfig &cfg) {
       const double elapsed_ms =
           std::chrono::duration<double, std::milli>(stop_time - start_time)
               .count();
-#else
-      CHECK_CUDA(cudaEventRecord(start));
-      reduce_blocks<<<kBlocks, kThreads>>>(dev_input, dev_partials, cfg.elements);
-      CHECK_CUDA(cudaGetLastError());
-      CHECK_CUDA(cudaEventRecord(stop));
-      CHECK_CUDA(cudaEventSynchronize(stop));
-      float elapsed_ms = 0.0f;
-      CHECK_CUDA(cudaEventElapsedTime(&elapsed_ms, start, stop));
-#endif
       launch_samples.push_back(static_cast<double>(elapsed_ms));
     }
     time_samples.push_back(
@@ -159,10 +144,6 @@ int run_case(const CaseConfig &cfg) {
               time_stats.min, time_stats.median, time_stats.avg,
               time_stats.max);
 
-#ifndef GPGPU_SIM
-  CHECK_CUDA(cudaEventDestroy(stop));
-  CHECK_CUDA(cudaEventDestroy(start));
-#endif
 #if !defined(GPGPU_SIM) && !defined(PERF_RUN)
   CHECK_CUDA(cudaFree(dev_l2_flush));
 #endif
@@ -177,14 +158,28 @@ int run_case(const CaseConfig &cfg) {
 
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    std::fprintf(stderr, "usage: %s <case>\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+  const char *case_filter = argv[1];
+  bool ran_case = false;
   std::printf("workload,case,elements,bytes,repeats,passes,expected,observed,"
               "abs_error,min_ms,median_ms,avg_ms,max_ms\n");
   for (const CaseConfig &cfg : kCases) {
+    if (std::strcmp(case_filter, cfg.name) != 0) {
+      continue;
+    }
+    ran_case = true;
     const int rc = run_case(cfg);
     if (rc != EXIT_SUCCESS) {
       return rc;
     }
+  }
+  if (!ran_case) {
+    std::fprintf(stderr, "REAL_reduce case '%s' not found\n", case_filter);
+    return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }

@@ -111,12 +111,6 @@ int run_case(const CaseConfig &cfg) {
 #endif
 
   const int blocks = 256;
-#ifndef GPGPU_SIM
-  cudaEvent_t start = nullptr;
-  cudaEvent_t stop = nullptr;
-  CHECK_CUDA(cudaEventCreate(&start));
-  CHECK_CUDA(cudaEventCreate(&stop));
-#endif
   std::vector<double> time_samples;
   time_samples.reserve(cal_kernels::kNativePasses);
   float last_pattern_base = 0.0f;
@@ -136,7 +130,6 @@ int run_case(const CaseConfig &cfg) {
 #if !defined(PERF_RUN)
       CHECK_CUDA(cal_kernels::run_cold_l2_flush(dev_l2_flush, l2_flush_elements));
 #endif
-#ifdef GPGPU_SIM
       const auto start_time = std::chrono::steady_clock::now();
       gather_kernel<<<blocks, kThreads>>>(dev_x, dev_idx, dev_y, cfg.elements);
       CHECK_CUDA(cudaGetLastError());
@@ -145,15 +138,6 @@ int run_case(const CaseConfig &cfg) {
       const double elapsed_ms =
           std::chrono::duration<double, std::milli>(stop_time - start_time)
               .count();
-#else
-      CHECK_CUDA(cudaEventRecord(start));
-      gather_kernel<<<blocks, kThreads>>>(dev_x, dev_idx, dev_y, cfg.elements);
-      CHECK_CUDA(cudaGetLastError());
-      CHECK_CUDA(cudaEventRecord(stop));
-      CHECK_CUDA(cudaEventSynchronize(stop));
-      float elapsed_ms = 0.0f;
-      CHECK_CUDA(cudaEventElapsedTime(&elapsed_ms, start, stop));
-#endif
       launch_samples.push_back(static_cast<double>(elapsed_ms));
     }
     time_samples.push_back(
@@ -187,10 +171,6 @@ int run_case(const CaseConfig &cfg) {
               cal_kernels::kNativePasses, checksum, error, time_stats.min,
               time_stats.median, time_stats.avg, time_stats.max);
 
-#ifndef GPGPU_SIM
-  CHECK_CUDA(cudaEventDestroy(stop));
-  CHECK_CUDA(cudaEventDestroy(start));
-#endif
 #if !defined(PERF_RUN)
   CHECK_CUDA(cudaFree(dev_l2_flush));
 #endif

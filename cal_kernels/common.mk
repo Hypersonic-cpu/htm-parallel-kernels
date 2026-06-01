@@ -76,8 +76,10 @@ endif
 CXXFLAGS ?= -I $(REPO_ROOT)/test_kernels/include -I $(REPO_ROOT)/cal_kernels/common -Xcompiler -fopenmp --expt-relaxed-constexpr -O3 -lineinfo
 CUFLAGS ?= -std=c++14
 CUFLAGS += $(HW_DEFINE)
+CUFLAGS += -DHTM_CONF_$(CONF)=1
 ifneq ($(filter $(ARCH),native perf),)
 CUFLAGS += -arch=$(NATIVE_SM)
+CUFLAGS += -DHTM_ARCH_NATIVE=1
 else
 CUFLAGS += --cudart shared -arch=$(SIM_SM) -DGPGPU_SIM
 endif

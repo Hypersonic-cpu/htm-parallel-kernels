@@ -23,8 +23,6 @@ __global__ void cold_l2_flush_kernel(float *data, std::size_t n) {
 
 inline cudaError_t run_cold_l2_flush(float *dev_flush,
                                      std::size_t flush_elements) {
-  printf("run_cold_l2_flush, elem = %lu\n", flush_elements);
-  fflush(stdout);
   cold_l2_flush_kernel<<<kColdL2FlushBlocks, kColdL2FlushThreads>>>(
       dev_flush, flush_elements);
   cudaError_t status = cudaGetLastError();
@@ -43,7 +41,6 @@ __global__ inline void cold_l2_flush_kernel(float *data, std::size_t n) {
 
 inline cudaError_t run_cold_l2_flush(float *dev_flush,
                                      std::size_t flush_elements) {
-  printf("dummy l2 flush, should flushed by GPGPU-Sim\n");
   cold_l2_flush_kernel<<<1, 1>>>(dev_flush, 1);
   cudaError_t status = cudaGetLastError();
   if (status != cudaSuccess) {
