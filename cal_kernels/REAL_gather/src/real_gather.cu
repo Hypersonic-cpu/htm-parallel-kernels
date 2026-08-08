@@ -24,11 +24,11 @@
 namespace {
 
 constexpr int kThreads = 256;
-#if defined(GPGPU_SIM) || defined(PERF_RUN)
+// #if defined(GPGPU_SIM) || defined(PERF_RUN)
 constexpr int kRepeats = 1;
-#else
-constexpr int kRepeats = 10;
-#endif
+// #else
+// constexpr int kRepeats = 10;
+// #endif
 constexpr int kWarmLaunches = 0;
 
 struct CaseConfig {

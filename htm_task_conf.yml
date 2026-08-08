@@ -1,0 +1,112 @@
+htm-single-auto-trace:
+    exec_dir: "$ACCELSIM_ROOT/util/tracer_nvbit"
+    data_dirs: "$ACCELSIM_ROOT"
+    execs:
+        - VAL_l2_parallel:
+            - args: 1
+              trace_name: VAL_l2_parallel-b1-hotL2-k1k2
+              trace_env:
+                  DYNAMIC_KERNEL_LIMIT_START: "1"
+                  DYNAMIC_KERNEL_LIMIT_END: "2"
+                  ACTIVE_FROM_START: "1"
+                  TERMINATE_UPON_LIMIT: "1"
+                  TRACE_FILE_COMPRESS: "1"
+            - args: 132
+              trace_name: VAL_l2_parallel-b132-hotL2-k1k2
+              trace_env:
+                  DYNAMIC_KERNEL_LIMIT_START: "1"
+                  DYNAMIC_KERNEL_LIMIT_END: "2"
+                  ACTIVE_FROM_START: "1"
+                  TERMINATE_UPON_LIMIT: "1"
+                  TRACE_FILE_COMPRESS: "1"
+        - VAL_hbm_parallel:
+            - args: 1
+              trace_name: VAL_hbm_parallel-b1-coldHBM-k3
+              trace_env:
+                  DYNAMIC_KERNEL_LIMIT_START: "3"
+                  DYNAMIC_KERNEL_LIMIT_END: "3"
+                  ACTIVE_FROM_START: "1"
+                  TERMINATE_UPON_LIMIT: "1"
+                  TRACE_FILE_COMPRESS: "1"
+            - args: 132
+              trace_name: VAL_hbm_parallel-b132-coldHBM-k3
+              trace_env:
+                  DYNAMIC_KERNEL_LIMIT_START: "3"
+                  DYNAMIC_KERNEL_LIMIT_END: "3"
+                  ACTIVE_FROM_START: "1"
+                  TERMINATE_UPON_LIMIT: "1"
+                  TRACE_FILE_COMPRESS: "1"
+        - REAL_gather:
+            - args: lt_l2
+              trace_name: REAL_gather-lt_l2
+              trace_env: &single_cold_kernel2
+                  DYNAMIC_KERNEL_LIMIT_START: "2"
+                  DYNAMIC_KERNEL_LIMIT_END: "2"
+                  ACTIVE_FROM_START: "1"
+                  TERMINATE_UPON_LIMIT: "1"
+                  TRACE_FILE_COMPRESS: "1"
+            - args: ll_l2
+              trace_name: REAL_gather-ll_l2
+              trace_env: *single_cold_kernel2
+            - args: gt_l2
+              trace_name: REAL_gather-gt_l2
+              trace_env: *single_cold_kernel2
+            - args: approx_l2
+              trace_name: REAL_gather-approx_l2
+              trace_env: *single_cold_kernel2
+        - REAL_gemm:
+            - args: test
+              trace_name: REAL_gemm-test
+              trace_env: *single_cold_kernel2
+            - args: le_l2
+              trace_name: REAL_gemm-le_l2
+              trace_env: *single_cold_kernel2
+            - args: gt_l2
+              trace_name: REAL_gemm-gt_l2
+              trace_env: *single_cold_kernel2
+        - REAL_reduce:
+            - args: le_l2
+              trace_name: REAL_reduce-le_l2
+              trace_env: *single_cold_kernel2
+        - REAL_scatter:
+            - args: le_l2
+              trace_name: REAL_scatter-le_l2
+              trace_env: *single_cold_kernel2
+        - REAL_softmax:
+            - args: le_l2
+              trace_name: REAL_softmax-le_l2
+              trace_env: *single_cold_kernel2
+        - REAL_spmm:
+            - args: gt_l2
+              trace_name: REAL_spmm-gt_l2
+              trace_env: *single_cold_kernel2
+            - args: le_l2
+              trace_name: REAL_spmm-le_l2
+              trace_env: *single_cold_kernel2
+        - REAL_vadd:
+            - args: test
+              trace_name: REAL_vadd-test
+              trace_env: *single_cold_kernel2
+
+htm-mgpu-auto-trace:
+    exec_dir: "$ACCELSIM_ROOT/util/tracer_nvbit"
+    data_dirs: "$ACCELSIM_ROOT"
+    execs:
+        - peer_copy:
+            - args: 2 test
+              trace_name: peer_copy-2g-test
+              trace_env: &multi_cold_kernel34
+                  DYNAMIC_KERNEL_LIMIT_START: "3"
+                  DYNAMIC_KERNEL_LIMIT_END: "4"
+                  ACTIVE_FROM_START: "1"
+                  TERMINATE_UPON_LIMIT: "1"
+                  TRACE_FILE_COMPRESS: "1"
+        - all_gather:
+            - args: 2 test
+              trace_name: all_gather-2g-test
+              trace_env: *multi_cold_kernel34
+        - all_reduce:
+            - args: 2 test
+              trace_name: all_reduce-2g-test
+              trace_env: *multi_cold_kernel34
+

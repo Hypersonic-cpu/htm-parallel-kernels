@@ -23,11 +23,11 @@
 namespace {
 
 constexpr int kThreadsPerBlock = 256;
-#if defined(GPGPU_SIM) || defined(PERF_RUN)
+// #if defined(GPGPU_SIM) || defined(PERF_RUN)
 constexpr int kIters = 1;
-#else
-constexpr int kIters = 10;
-#endif
+// #else
+// constexpr int kIters = 10;
+// #endif
 
 #if defined(HTM_CONF_GV100)
 constexpr std::size_t kL2Bytes = 6ULL * 1024 * 1024;
