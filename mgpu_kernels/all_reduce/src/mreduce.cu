@@ -76,6 +76,18 @@ static std::size_t elem_count_for_case(const char *case_name) {
   if (std::strcmp(case_name, "test") == 0) {
     return 4096;
   }
+  // Weak-scaling profiles: this input size is per GPU and is independent of
+  // the requested GPU count.
+  if (std::strcmp(case_name, "small") == 0) {
+    return 1u << 18;  // 1 MiB per GPU.
+  }
+  if (std::strcmp(case_name, "medium") == 0) {
+    return 1u << 20;  // 4 MiB per GPU.
+  }
+  if (std::strcmp(case_name, "large") == 0) {
+    return 1u << 22;  // 16 MiB per GPU.
+  }
+  // Preserve the established profile names for existing callers.
   if (std::strcmp(case_name, "le_l2") == 0) {
     return 1u << 18;
   }

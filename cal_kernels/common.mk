@@ -39,6 +39,14 @@ RUN_TIMEOUT ?=
 REPORT_KIND ?= generic
 RUN_ARGS ?=
 NCU_RUN_ARGS ?=
+NCU_GROUPS ?= timing_clock,l1_l2,dram,execution,scheduler_stall
+NCU_GPU ?= 0
+NCU_VISIBLE_DEVICES ?=
+NCU_GPC_CLOCK_MHZ ?= 1590
+NCU_CACHE_CONTROL ?= $(if $(findstring --cache-control none,$(NCU_RUN_ARGS)),none,all)
+NCU_SUDO ?= auto
+NCU_GROUP_RUNNER ?= $(REPO_ROOT)/cal_kernels/common/ncu_group_runner.py
+NCU_WORKFLOW_VERSION ?= 2
 SIM_NUM_DEVICES ?=
 SIM_CONFIG_SED ?=
 SIM_CONFIG_APPEND ?=
@@ -47,6 +55,11 @@ NATIVE_METRICS ?=
 NATIVE_REPORT_PATTERNS ?=
 SIM_STATS ?= $(RUN_DIR)/stats.txt
 NATIVE_CSV ?= $(RUN_DIR)/ncu.csv
+RUN_DIR_ABS := $(abspath $(RUN_DIR))
+NATIVE_CSV_ABS := $(abspath $(NATIVE_CSV))
+NCU_STATS_ABS := $(abspath $(RUN_DIR)/stats.txt)
+NCU_RUNNER_LOG_ABS := $(abspath $(RUN_DIR)/ncu_runner.log)
+NCU_RUNNER_PLAN_LOG_ABS := $(abspath $(RUN_DIR)/ncu_runner_plan.log)
 PRETTY_CSV_AWK := awk "BEGIN{seen_csv=0; ht=sprintf(\"%c\",9); dt=ht ht} /,/{if(!seen_csv){gsub(\",\",\",\" ht); seen_csv=1}else{gsub(\",\",\",\" dt)}} {print}"
 
 ifneq ($(filter $(ARCH),native perf),)
@@ -143,7 +156,8 @@ clean:
 	@rm -rf "$(RUN_DIR)"
 
 rmdump:
-	@rm -f $(RUN_DIR)/_app_cuda_* $(RUN_DIR)/_cuobjdump_* $(RUN_DIR)/SystemConfig $(RUN_DIR)/KernelConfig $(RUN_DIR)/TB_schedule_* $(RUN_DIR)/data_placement_* $(SIM_STATS) $(NATIVE_CSV) $(RUN_DIR)/nvprof.txt $(RUN_DIR)/report.txt $(RUN_DIR)/report.csv
+	@rm -f $(RUN_DIR)/_app_cuda_* $(RUN_DIR)/_cuobjdump_* $(RUN_DIR)/SystemConfig $(RUN_DIR)/KernelConfig $(RUN_DIR)/TB_schedule_* $(RUN_DIR)/data_placement_* $(SIM_STATS) $(NATIVE_CSV) $(RUN_DIR)/nvprof.txt $(RUN_DIR)/report.txt $(RUN_DIR)/report.csv $(RUN_DIR)/ncu_group_summary.csv $(RUN_DIR)/ncu_runner.log $(RUN_DIR)/ncu_runner_plan.log
+	@rm -rf $(RUN_DIR)/ncu_groups
 
 show:
 	@echo REPO_ROOT=$(REPO_ROOT)
@@ -165,6 +179,13 @@ show:
 	@echo RUN_ROOT=$(RUN_ROOT)
 	@echo RUN_SUBDIR=$(RUN_SUBDIR)
 	@echo RUN_DIR=$(RUN_DIR)
+	@echo NCU_GROUPS=$(NCU_GROUPS)
+	@echo NCU_GPU=$(NCU_GPU)
+	@echo NCU_VISIBLE_DEVICES=$(NCU_VISIBLE_DEVICES)
+	@echo NCU_GPC_CLOCK_MHZ=$(NCU_GPC_CLOCK_MHZ)
+	@echo NCU_CACHE_CONTROL=$(NCU_CACHE_CONTROL)
+	@echo NCU_SUDO=$(NCU_SUDO)
+	@echo NCU_WORKFLOW_VERSION=$(NCU_WORKFLOW_VERSION)
 	@echo SIM_LIBCUDART_SO=$(SIM_LIBCUDART_SO)
 
 stage_run: pre_build all rmdump
@@ -185,7 +206,7 @@ run: stage_run
 ifeq ($(ARCH),native)
 	@bash -lc 'set -euo pipefail; export CUDA_INSTALL_PATH="$(CUDA_INSTALL_PATH)"; export CUDA_HOME="$(CUDA_INSTALL_PATH)"; export LD_LIBRARY_PATH="$(CUDA_INSTALL_PATH)/lib64:$${LD_LIBRARY_PATH-}"; export PATH="$(CUDA_INSTALL_PATH)/bin:$${PATH-}"; cd "$(CURDIR)"; cd "$(RUN_DIR)"; if [ -n "$(RUN_TIMEOUT)" ]; then timeout $(RUN_TIMEOUT) stdbuf -oL -eL ./$(BIN_NAME) $(RUN_ARGS) 2>&1 | tee stats.txt; else stdbuf -oL -eL ./$(BIN_NAME) $(RUN_ARGS) 2>&1 | tee stats.txt; fi'
 else ifeq ($(ARCH),perf)
-	@bash -lc 'set -euo pipefail; export CUDA_INSTALL_PATH="$(CUDA_INSTALL_PATH)"; export CUDA_HOME="$(CUDA_INSTALL_PATH)"; export LD_LIBRARY_PATH="$(CUDA_INSTALL_PATH)/lib64:$${LD_LIBRARY_PATH-}"; export PATH="$(CUDA_INSTALL_PATH)/bin:$${PATH-}"; cd "$(CURDIR)"; cd "$(RUN_DIR)"; if [ -n "$(RUN_TIMEOUT)" ]; then timeout $(RUN_TIMEOUT) stdbuf -oL -eL "$(NCU)" --target-processes all $(NCU_RUN_ARGS) --csv --page raw --log-file "$(notdir $(NATIVE_CSV))" --metrics "$(NATIVE_METRICS)" ./$(BIN_NAME) $(RUN_ARGS) 2>&1 | tee stats.txt; else stdbuf -oL -eL "$(NCU)" --target-processes all $(NCU_RUN_ARGS) --csv --page raw --log-file "$(notdir $(NATIVE_CSV))" --metrics "$(NATIVE_METRICS)" ./$(BIN_NAME) $(RUN_ARGS) 2>&1 | tee stats.txt; fi'
+	@bash -lc 'set -euo pipefail; export CUDA_INSTALL_PATH="$(CUDA_INSTALL_PATH)"; export CUDA_HOME="$(CUDA_INSTALL_PATH)"; export LD_LIBRARY_PATH="$(CUDA_INSTALL_PATH)/lib64:$${LD_LIBRARY_PATH-}"; export PATH="$(CUDA_INSTALL_PATH)/bin:$${PATH-}"; cd "$(CURDIR)"; cd "$(RUN_DIR)"; "$(PYTHON)" "$(NCU_GROUP_RUNNER)" --ncu "$(NCU)" --run-dir "$(RUN_DIR_ABS)" --merged-csv "$(NATIVE_CSV_ABS)" --stats-file "$(NCU_STATS_ABS)" --runner-log "$(NCU_RUNNER_PLAN_LOG_ABS)" --binary-name "$(BIN_NAME)" --run-args "$(RUN_ARGS)" --ncu-run-args "$(NCU_RUN_ARGS)" --extra-metrics "$(NATIVE_METRICS)" --kernel-name "$(NATIVE_KERNEL_NAME)" --groups "$(NCU_GROUPS)" --cache-control "$(NCU_CACHE_CONTROL)" --sudo-mode "$(NCU_SUDO)" --gpu-index "$(NCU_GPU)" --visible-devices "$(NCU_VISIBLE_DEVICES)" --target-gpc-mhz "$(NCU_GPC_CLOCK_MHZ)" $(if $(RUN_TIMEOUT),--timeout "$(RUN_TIMEOUT)",) 2>&1 | tee "$(NCU_RUNNER_LOG_ABS)"'
 else
 	@bash -lc 'set -eo pipefail; export CUDA_INSTALL_PATH="$(CUDA_INSTALL_PATH)"; export CUDA9_INSTALL_PATH="$(CUDA9_INSTALL_PATH)"; export OPENCL_REMOTE_GPU_HOST="${OPENCL_REMOTE_GPU_HOST-}"; set +u; if [ "$(CONF)" = "A100" ]; then export GPGPUSIM_ROOT="$(SIM_HOME)"; source "$(SIM_HOME)/setup_environment" >/dev/null; else source "$(REPO_ROOT)/sourceme" >/dev/null; $(SOURCE_FN) >/dev/null; fi; set -u; expected_libcudart=""; if [ -n "$(SIM_LIBCUDART_SO)" ]; then override_so="$(SIM_LIBCUDART_SO)"; if [ ! -f "$$override_so" ]; then echo "ERROR: missing SIM_LIBCUDART_SO=$$override_so" | tee "$(CURDIR)/$(RUN_DIR)/stats.txt"; exit 1; fi; shim_dir="$(CURDIR)/$(RUN_DIR)/.sim-libcudart"; mkdir -p "$$shim_dir"; rm -f "$$shim_dir"/libcudart.so "$$shim_dir"/libcudart.so.12 "$$shim_dir"/libcudart.so.11 "$$shim_dir"/libcudart.so.9.0; ln -sf "$$override_so" "$$shim_dir/libcudart.so"; ln -sf "$$override_so" "$$shim_dir/libcudart.so.12"; ln -sf "$$override_so" "$$shim_dir/libcudart.so.11"; ln -sf "$$override_so" "$$shim_dir/libcudart.so.9.0"; export LD_LIBRARY_PATH="$$shim_dir:$$(dirname "$$override_so"):$${LD_LIBRARY_PATH-}"; expected_libcudart=$$(readlink -f "$$override_so"); else if [ ! -f "$(SIM_HOME)/lib/$${GPGPUSIM_CONFIG}/libcudart.so" ]; then for fallback_config in gcc-11.4.0/cuda-12040/release gcc-11.4.0/cuda-11000/release gcc-5.4.0/cuda-9000/release gcc-/cuda-9000/release; do if [ -f "$(SIM_HOME)/lib/$${fallback_config}/libcudart.so" ]; then export GPGPUSIM_CONFIG="$${fallback_config}"; export LD_LIBRARY_PATH="$(SIM_HOME)/lib/$${fallback_config}:$${LD_LIBRARY_PATH-}"; break; fi; done; fi; fi; resolved_libcudart=$$(ldd "$(CURDIR)/$(RUN_BIN)" | sed -n "/libcudart\\.so/{s/.*=> //; s/ (.*//; p; q;}"); resolved_real=$$(readlink -f "$${resolved_libcudart:-/nonexistent}" 2>/dev/null || true); using_libcudart="$${resolved_real:-$${resolved_libcudart:-<missing>}}"; if [ -n "$$expected_libcudart" ]; then ok=0; [ "$$resolved_real" = "$$expected_libcudart" ] && ok=1; else ok=0; printf "%s\n" "$$resolved_libcudart" | grep -q "^$(SIM_HOME)/lib/" && ok=1; fi; if [ "$$ok" -ne 1 ]; then { echo "Using libcudart.so -> $$using_libcudart"; echo "ERROR: $(ARCH) run is not using the expected GPGPU-Sim libcudart"; echo "Resolved libcudart: $${resolved_libcudart:-<missing>}"; echo "Resolved realpath: $${resolved_real:-<missing>}"; echo "Expected libcudart: $${expected_libcudart:-$(SIM_HOME)/lib/...}"; echo "GPGPUSIM_CONFIG=$${GPGPUSIM_CONFIG:-<unset>}"; ldd "$(CURDIR)/$(RUN_BIN)"; } 2>&1 | tee "$(CURDIR)/$(RUN_DIR)/stats.txt"; exit 1; fi; cd "$(CURDIR)/$(RUN_DIR)"; { echo "Using libcudart.so -> $$using_libcudart"; echo "Resolved libcudart: $$resolved_libcudart"; echo "Resolved libcudart realpath: $$resolved_real"; echo "Expected libcudart: $${expected_libcudart:-<default from $(SIM_HOME)/lib>}"; echo "GPGPUSIM_CONFIG=$${GPGPUSIM_CONFIG:-<unset>}"; if [ -n "$(RUN_TIMEOUT)" ]; then timeout $(RUN_TIMEOUT) stdbuf -oL -eL ./$(BIN_NAME) $(RUN_ARGS); else stdbuf -oL -eL ./$(BIN_NAME) $(RUN_ARGS); fi; } 2>&1 | tee stats.txt; rc=$$?; tail -n 120 stats.txt; exit $$rc'
 endif

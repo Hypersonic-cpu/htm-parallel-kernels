@@ -810,6 +810,8 @@ def parse_native_csv(path: pathlib.Path):
                 rows.append(
                     {
                         "device": device,
+                        "context": get("Context"),
+                        "stream": get("Stream"),
                         "kernel": kernel,
                         "metric": metric,
                         "value": value,
@@ -845,6 +847,8 @@ def parse_native_csv(path: pathlib.Path):
             rows.append(
                 {
                     "device": device,
+                    "context": get("Context"),
+                    "stream": get("Stream"),
                     "kernel": kernel,
                     "metric": None,
                     "value": None,
@@ -853,20 +857,31 @@ def parse_native_csv(path: pathlib.Path):
                 }
             )
     grouped = {}
-    for row in rows:
-        label_parts = []
-        if row["invocations"]:
-            label_parts.append(str(row["invocations"]))
-        if row["device"]:
-            label_parts.append(row["device"])
-        label_parts.append(row["kernel"])
-        label = " :: ".join(label_parts)
+    for ordinal, row in enumerate(rows):
+        launch_id = row["invocations"] or "ordinal:{}".format(ordinal)
+        identity_parts = [
+            str(launch_id),
+            row.get("device", ""),
+            row.get("context", ""),
+            row.get("stream", ""),
+            row["kernel"],
+        ]
+        launch_identity = "|".join(identity_parts)
+        label = launch_identity
+        if label in grouped:
+            # Keep duplicate IDs separate as well.  This is rare in normal
+            # NCU output, but preserving the row ordinal prevents a repeated
+            # kernel name/ID from being silently aggregated.
+            label = "{}|duplicate:{}".format(label, ordinal)
         entry = grouped.setdefault(
             label,
             {
                 "kernel": row["kernel"],
                 "device": row["device"],
+                "context": row.get("context", ""),
+                "stream": row.get("stream", ""),
                 "invocations": row["invocations"],
+                "launch_identity": launch_identity,
                 "metrics": {},
             },
         )
@@ -993,8 +1008,30 @@ def native_metric(metrics, *names):
     return None
 
 
+def native_report_value(value):
+    if value is None or str(value).strip() == "":
+        return "N/A"
+    if str(value).strip().upper() in {"NA", "N/A", "NAN"}:
+        return "N/A"
+    return fmt_value(value)
+
+
+def read_native_manifest(native_csv: pathlib.Path):
+    manifest_path = native_csv.parent / "ncu_groups" / "manifest.json"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        import json
+
+        value = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def report_native(kind: str, native_csv: pathlib.Path, pattern_arg: str):
     entries = parse_native_csv(native_csv)
+    manifest = read_native_manifest(native_csv)
     patterns = [p for p in pattern_arg.split(",") if p]
     selected = filter_kernel_entries(list(entries.items()), patterns)
     if not selected:
@@ -1004,7 +1041,7 @@ def report_native(kind: str, native_csv: pathlib.Path, pattern_arg: str):
     row_map = map_rows_to_entries(selected, app_rows)
     wanted = wanted_metrics(kind)
     app_columns = ordered_app_columns(app_rows)
-    columns = ["record_type", "kernel", "device", "launch_id"]
+    columns = ["record_type", "kernel", "device", "launch_id", "launch_identity"]
     columns.extend([col for col in app_columns if col not in columns])
     if kind == "dep_chain":
         columns.extend(
@@ -1018,8 +1055,15 @@ def report_native(kind: str, native_csv: pathlib.Path, pattern_arg: str):
                 "smsp__sass_thread_inst_executed_op_integer_pred_on.sum",
             ]
         )
+        columns.extend(
+            [
+                col
+                for col in (manifest.get("report_metrics") or [])
+                if col not in columns
+            ]
+        )
     else:
-        metric_columns = wanted if wanted is not None else []
+        metric_columns = manifest.get("report_metrics") or wanted or []
         columns.extend([col for col in metric_columns if col not in columns])
 
     rows = []
@@ -1029,6 +1073,7 @@ def report_native(kind: str, native_csv: pathlib.Path, pattern_arg: str):
             "kernel": entry.get("kernel", ""),
             "device": entry.get("device", ""),
             "launch_id": entry.get("invocations", ""),
+            "launch_identity": entry.get("launch_identity", ""),
         }
         app_row = row_map.get(idx)
         if app_row:
@@ -1037,25 +1082,25 @@ def report_native(kind: str, native_csv: pathlib.Path, pattern_arg: str):
         if kind == "dep_chain":
             kernel_name = entry.get("kernel", "")
             if "dep_chain_fp" in kernel_name:
-                row["APP_fadd_raw_cycles_per_op"] = fmt_value(
+                row["APP_fadd_raw_cycles_per_op"] = native_report_value(
                     app_latencies.get("fadd_raw_cycles_per_op")
                 )
-                row["APP_fadd_adjusted_cycles_per_op"] = fmt_value(
+                row["APP_fadd_adjusted_cycles_per_op"] = native_report_value(
                     app_latencies.get("fadd_adjusted_cycles_per_op")
                 )
             if "dep_chain_int" in kernel_name:
-                row["APP_iadd_raw_cycles_per_op"] = fmt_value(
+                row["APP_iadd_raw_cycles_per_op"] = native_report_value(
                     app_latencies.get("iadd_raw_cycles_per_op")
                 )
             for key in columns:
                 if key in row or key.startswith("APP_"):
                     continue
-                row[key] = fmt_value(entry["metrics"].get(key))
+                row[key] = native_report_value(entry["metrics"].get(key))
         else:
             for key in columns:
                 if key in row or key.startswith("APP_"):
                     continue
-                row[key] = fmt_value(entry["metrics"].get(key))
+                row[key] = native_report_value(entry["metrics"].get(key))
         rows.append(row)
     emit_csv(columns, rows)
 

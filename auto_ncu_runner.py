@@ -42,7 +42,7 @@ DONE_FILE = ".htm_ncu.done.json"
 CASE_LOCK_FILE = ".htm_ncu.case.lock"
 GLOBAL_LOCK_FILE = ".htm_ncu.runner.lock"
 RUNNER_LOG = ".htm_ncu.runner.log"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def eprint(*args: object) -> None:
@@ -296,6 +296,8 @@ def completion_status(case_dir: Path, expected_digest: str, need_report: bool) -
         return False, "missing/nonempty stats.txt"
     if not has_nonempty_file(case_dir / "ncu.csv"):
         return False, "missing/nonempty ncu.csv"
+    if not has_nonempty_file(case_dir / "ncu_groups" / "manifest.json"):
+        return False, "missing/nonempty ncu_groups/manifest.json"
     if need_report and not has_nonempty_file(case_dir / "report.csv"):
         return False, "missing/nonempty report.csv"
     return True, "complete"
@@ -335,6 +337,34 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--output-root", help="absolute or relative RUN_ROOT for all cases")
     parser.add_argument("--arch", default="perf", help="Makefile ARCH value; default: perf")
     parser.add_argument("--conf", default="GH100", help="Makefile CONF value; default: GH100")
+    parser.add_argument(
+        "--gpu",
+        default=os.environ.get("NCU_GPU", "0"),
+        help="physical nvidia-smi GPU index for the external GPC lock; default: NCU_GPU or 0",
+    )
+    parser.add_argument(
+        "--visible-devices",
+        default=os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+        help="CUDA_VISIBLE_DEVICES value inherited by each profiled application",
+    )
+    parser.add_argument(
+        "--gpc-clock-mhz",
+        default=os.environ.get("NCU_GPC_CLOCK_MHZ", "1590"),
+        help="locked GPC clock in MHz; default: NCU_GPC_CLOCK_MHZ or 1590",
+    )
+    parser.add_argument(
+        "--ncu-groups",
+        default=os.environ.get(
+            "NCU_GROUPS", "timing_clock,l1_l2,dram,execution,scheduler_stall"
+        ),
+        help="comma-separated grouped NCU workflow names",
+    )
+    parser.add_argument(
+        "--ncu-sudo-mode",
+        choices=["auto", "never", "always"],
+        default=os.environ.get("NCU_SUDO", "auto"),
+        help="NCU privilege mode: auto retries as root on ERR_NVGPUCTRPERM",
+    )
     parser.add_argument("--only", action="append", default=[], help="run only matching bench or case_name; repeatable")
     parser.add_argument("--skip", action="append", default=[], help="skip matching bench or case_name; repeatable")
     parser.add_argument("--force-refresh", action="store_true", help="rerun even if done marker exists")
@@ -362,6 +392,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not cases:
         print("No cases selected.")
         return 0
+
+    # Include hardware/profile identity in the resumable command digest.  A
+    # completed result from GPU 0 at one locked clock must not be reused for a
+    # different GPU, visibility mask, clock target, or metric-group plan.
+    for case in cases:
+        case.make_vars.setdefault("NCU_GPU", str(args.gpu))
+        case.make_vars.setdefault("NCU_GPC_CLOCK_MHZ", str(args.gpc_clock_mhz))
+        case.make_vars.setdefault("NCU_GROUPS", str(args.ncu_groups))
+        case.make_vars.setdefault("NCU_SUDO", str(args.ncu_sudo_mode))
+        case.make_vars.setdefault("NCU_WORKFLOW_VERSION", str(SCHEMA_VERSION))
+        if args.visible_devices:
+            case.make_vars.setdefault("NCU_VISIBLE_DEVICES", str(args.visible_devices))
 
     print(f"YAML group : {group_name}")
     print(f"cal_root   : {cal_root}")
@@ -448,4 +490,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
